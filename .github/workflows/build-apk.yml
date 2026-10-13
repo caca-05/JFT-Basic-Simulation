@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout repository
         uses: actions/checkout@v7
 
@@ -34,14 +35,64 @@ jobs:
           sdkmanager "platforms;android-35"
           sdkmanager "build-tools;35.0.0"
 
+      - name: Find Android ZIP
+        run: |
+          echo "Files in repository:"
+          find . -maxdepth 3 -type f | sort
+
+      - name: Extract Android project
+        run: |
+          mkdir -p android_project
+
+          ZIP_FILE=$(find . -maxdepth 2 -type f -name "*.zip" | head -n 1)
+
+          if [ -z "$ZIP_FILE" ]; then
+            echo "ERROR: Android ZIP tidak ditemukan."
+            exit 1
+          fi
+
+          echo "ZIP ditemukan: $ZIP_FILE"
+
+          unzip -o "$ZIP_FILE" -d android_project
+
+          echo "Isi hasil extract:"
+          find android_project -maxdepth 4 -type f | sort
+
+      - name: Find Gradle wrapper
+        run: |
+          GRADLEW=$(find android_project -type f -name "gradlew" | head -n 1)
+
+          if [ -z "$GRADLEW" ]; then
+            echo "ERROR: gradlew tidak ditemukan."
+            echo "Isi folder android_project:"
+            find android_project -maxdepth 5 -type f | sort
+            exit 1
+          fi
+
+          echo "gradlew ditemukan:"
+          echo "$GRADLEW"
+
+          PROJECT_DIR=$(dirname "$GRADLEW")
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
       - name: Make gradlew executable
-        run: chmod +x gradlew
+        run: |
+          chmod +x "$PROJECT_DIR/gradlew"
 
       - name: Build APK
-        run: ./gradlew assembleDebug
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Find APK
+        run: |
+          echo "APK yang dihasilkan:"
+          find "$PROJECT_DIR" -type f -name "*.apk" -print
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: JFT-Basic-APK
-          path: '**/build/outputs/apk/debug/*.apk'
+          path: |
+            ${{ env.PROJECT_DIR }}/**/build/outputs/apk/debug/*.apk
